@@ -4,7 +4,8 @@ name: MyCommute
 options:
   bundleIdPrefix: net.leatham
   deploymentTarget:
-    iOS: "17.0"
+    # 17.2 for Live Activity push-to-start (scheduled commutes start with no app running).
+    iOS: "17.2"
   createIntermediateGroups: true
 settings:
   base:
@@ -23,6 +24,12 @@ targets:
       - Shared
     dependencies:
       - target: MyCommuteWidgets
+    entitlements:
+      path: MyCommute/MyCommute.entitlements
+      properties:
+        # Live Activity push tokens. Debug builds from Xcode get sandbox tokens, and
+        # the app tells the server which kind it has (ServerConfig.apnsEnvironment).
+        aps-environment: production
     info:
       path: MyCommute/Info.plist
       properties:
@@ -32,9 +39,13 @@ targets:
           - UIInterfaceOrientationPortrait
         NSSupportsLiveActivities: true
         NSSupportsLiveActivitiesFrequentUpdates: false
-        UIBackgroundModes:
-          - location
-        NSLocationWhenInUseUsageDescription: My Commute uses your location to tell where you are on your journey and to time the drive.
+        # Geofences only (CLMonitor): no location background mode and no continuous GPS.
+        NSLocationWhenInUseUsageDescription: Your location is used to set home or work from where you are now.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Lets the app notice when you leave home, reach a station or arrive, so your commute's Live Activity moves on and ends by itself. Your location stays on your phone.
+        # The server in server/ (origin only, no path). See server/README.md.
+        BackendURL: https://commute-api.leatham.net
+        PrivacyPolicyURL: https://example.com/commute/privacy
+        SupportURL: https://example.com/commute/support
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:

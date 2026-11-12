@@ -3,13 +3,12 @@ import AppIntents
 extension CommuteDirection: AppEnum {
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Direction"
     static let caseDisplayRepresentations: [CommuteDirection: DisplayRepresentation] = [
-        .toLondon: "To London",
-        .home: "Home",
+        .toWork: "To work",
+        .toHome: "Home",
     ]
 }
 
-/// Lets a Shortcuts personal automation (e.g. weekdays at 06:30 and 16:30) start the
-/// Live Activity without opening the app.
+/// For days that aren't on the schedule: Siri, the Shortcuts app, or a Shortcuts automation.
 struct StartCommuteIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Start commute"
     static let description = IntentDescription("Starts the commute Live Activity.")
@@ -24,7 +23,7 @@ struct StartCommuteIntent: LiveActivityIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        await CommuteEngine.shared.start(direction)
+        await LiveActivities.shared.start(direction)
         return .result()
     }
 }
@@ -33,7 +32,7 @@ struct StopCommuteIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Stop commute"
 
     func perform() async throws -> some IntentResult {
-        await CommuteEngine.shared.stop()
+        await LiveActivities.shared.stop()
         return .result()
     }
 }
@@ -41,13 +40,13 @@ struct StopCommuteIntent: LiveActivityIntent {
 struct CommuteShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
-            intent: StartCommuteIntent(direction: .toLondon),
-            phrases: ["Start my commute to London in \(.applicationName)"],
-            shortTitle: "Commute to London",
-            systemImageName: "tram.fill"
+            intent: StartCommuteIntent(direction: .toWork),
+            phrases: ["Start my commute to work in \(.applicationName)"],
+            shortTitle: "Commute to work",
+            systemImageName: "briefcase.fill"
         )
         AppShortcut(
-            intent: StartCommuteIntent(direction: .home),
+            intent: StartCommuteIntent(direction: .toHome),
             phrases: ["Start my commute home in \(.applicationName)"],
             shortTitle: "Commute home",
             systemImageName: "house.fill"

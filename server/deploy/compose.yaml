@@ -1,0 +1,30 @@
+# The server on the shared backend host (app-factory/infra/backend-host). The host's
+# Cloudflare Tunnel reaches it as "commute:8080" on the "web" network; Cloudflare
+# handles HTTPS for commute-api.leatham.net.
+# Settings: .env here (copy commute.env.example). Keys: ./secrets/apns.p8, maps.p8.
+name: commute
+
+services:
+  server:
+    build: ..
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/commute.db
+      APNS_PRIVATE_KEY_FILE: /run/secrets/apns.p8
+      MAPS_PRIVATE_KEY_FILE: /run/secrets/maps.p8
+    volumes:
+      - data:/data
+      - ./secrets:/run/secrets:ro
+    networks:
+      web:
+        aliases: [commute]
+    mem_limit: 384m
+
+networks:
+  web:
+    external: true
+
+volumes:
+  # The SQLite database, on the host's boot disk (covered by its daily snapshots).
+  data:

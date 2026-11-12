@@ -5,57 +5,78 @@ import WidgetKit
 struct CommuteLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CommuteAttributes.self) { context in
-            CommuteLockScreenView(direction: context.attributes.direction, state: context.state)
+            CommuteLockScreenView(attributes: context.attributes, state: context.state, stale: context.isStale)
                 .padding(16)
                 .activityBackgroundTint(Color.black.opacity(0.35))
         } dynamicIsland: { context in
             let state = context.state
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: state.hasProblems ? "exclamationmark.triangle.fill" : "tram.fill")
-                        .foregroundStyle(state.hasProblems ? .orange : .purple)
+                    StatusIcon(state: state)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    Text(context.attributes.direction.title).font(.headline)
+                    Text("\(context.attributes.fromName) → \(context.attributes.toName)")
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     CommuteDetails(direction: context.attributes.direction, state: state)
                 }
             } compactLeading: {
-                Image(systemName: state.hasProblems ? "exclamationmark.triangle.fill" : "tram.fill")
-                    .foregroundStyle(state.hasProblems ? .orange : .purple)
+                StatusIcon(state: state)
             } compactTrailing: {
-                if let next = state.trains.first {
-                    Text(next, style: .time).monospacedDigit().frame(maxWidth: 52)
+                if let next = state.departures.first {
+                    Text(next.date, style: .time).monospacedDigit().frame(maxWidth: 52)
                 } else if let drive = state.driveMinutes {
                     Text("\(drive)m").monospacedDigit()
                 } else {
                     Image(systemName: "checkmark")
                 }
             } minimal: {
-                Image(systemName: state.hasProblems ? "exclamationmark.triangle.fill" : "tram.fill")
-                    .foregroundStyle(state.hasProblems ? .orange : .purple)
+                StatusIcon(state: state)
             }
         }
     }
 }
 
-struct CommuteLockScreenView: View {
-    let direction: CommuteDirection
+private struct StatusIcon: View {
     let state: CommuteAttributes.ContentState
+
+    var body: some View {
+        let symbol: String = {
+            if state.hasProblems { return "exclamationmark.triangle.fill" }
+            switch state.stage {
+            case .driving: return "car.fill"
+            default: return "tram.fill"
+            }
+        }()
+        Image(systemName: symbol).foregroundStyle(state.hasProblems ? Color.orange : Color.accentColor)
+    }
+}
+
+struct CommuteLockScreenView: View {
+    let attributes: CommuteAttributes
+    let state: CommuteAttributes.ContentState
+    let stale: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(direction.title)
+                Text("\(attributes.fromName) → \(attributes.toName)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Spacer()
-                Text(state.updated, style: .time)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                Group {
+                    if stale {
+                        Text("Not updating").foregroundStyle(.orange)
+                    } else {
+                        Text(state.updatedDate, style: .time).foregroundStyle(.secondary)
+                    }
+                }
+                .font(.caption2)
             }
-            CommuteDetails(direction: direction, state: state)
+            CommuteDetails(direction: attributes.direction, state: state)
         }
     }
 }
@@ -68,18 +89,12 @@ struct CommuteDetails: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if state.hasProblems {
-                Label(state.stage == .normal ? "Problem" : state.headline, systemImage: "exclamationmark.triangle.fill")
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                ForEach(state.problems, id: \.self) { Text($0).font(.subheadline) }
-            } else {
-                Label(state.headline, systemImage: state.stage == .normal ? "checkmark.circle.fill" : "location.fill")
-                    .font(.headline)
-                    .foregroundStyle(state.stage == .normal ? .green : .primary)
-            }
+            Label(state.headline, systemImage: state.hasProblems ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .font(.headline)
+                .foregroundStyle(state.hasProblems ? Color.orange : Color.green)
+            ForEach(state.problems.prefix(3), id: \.self) { Text($0).font(.subheadline).lineLimit(2) }
             HStack(spacing: 16) {
-                if direction == .toLondon {
+                if direction == .toWork {
                     drive
                     trains
                 } else {
@@ -98,10 +113,15 @@ struct CommuteDetails: View {
     }
 
     @ViewBuilder private var trains: some View {
-        if !state.trains.isEmpty {
-            HStack(spacing: 6) {
+        if !state.departures.isEmpty {
+            HStack(spacing: 8) {
                 Image(systemName: "tram.fill")
-                ForEach(state.trains, id: \.self) { Text($0, style: .time) }
+                ForEach(state.departures.prefix(3), id: \.self) { d in
+                    HStack(spacing: 2) {
+                        Text(d.date, style: .time)
+                        if let p = d.platform { Text("P\(p)").font(.caption2).foregroundStyle(.secondary) }
+                    }
+                }
             }
         }
     }

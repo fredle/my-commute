@@ -1,0 +1,19 @@
+{
+  "name": "commute-server",
+  "private": true,
+  "type": "module",
+  "description": "Backend for the commute app: schedules commutes, fetches train and traffic data, and drives Live Activities over APNs.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "dev": "node --watch src/main.ts",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  }
+}
