@@ -1,0 +1,109 @@
+name: ios
+
+# Builds the iOS app and uploads it to TestFlight. No Mac of ours is involved:
+# the runner compiles an unsigned archive and Apple's cloud-managed signing
+# signs it during the upload, authenticated by an App Store Connect API key.
+# Setup steps and gotchas: docs/ios-build-and-testflight.md
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+# Two uploads at once would race for the same build number.
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  testflight:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      # Change these two to match the Xcode project under ios/.
+      XCODE_PROJECT: MyCommute.xcodeproj
+      SCHEME: MyCommute
+      TEAM_ID: R53MF3F498
+      ARCHIVE: ${{ github.workspace }}/ios/build/App.xcarchive
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the toolchain
+        run: xcodebuild -version
+
+      # The Xcode project is generated from ios/project.yml, not checked in.
+      - name: Generate the Xcode project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      # Compiling needs no credentials, so pull requests and forks can never
+      # reach the key. Signing is left to the export step below.
+      - name: Archive (unsigned)
+        working-directory: ios
+        run: |
+          xcodebuild archive \
+            -project "$XCODE_PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            -archivePath "$ARCHIVE" \
+            CODE_SIGNING_ALLOWED=NO
+
+      # Until the secrets exist there is nothing to upload with. Skip rather
+      # than fail, so the build signal above stays honest.
+      - id: preflight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_PRIVATE_KEY" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Upload skipped::Set the ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY secrets to upload to TestFlight."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The key must carry the Admin role: App Manager is refused access to
+      # cloud-managed distribution certificates. Apple picks the next build
+      # number itself (manageAppVersionAndBuildNumber).
+      - name: Sign and upload to TestFlight
+        if: steps.preflight.outputs.ready == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          umask 077
+          KEY="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$KEY"
+          trap 'rm -f "$KEY"' EXIT
+
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><true/>
+          </dict></plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
