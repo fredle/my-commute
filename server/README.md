@@ -62,8 +62,10 @@ feature off and is logged at start-up. The rest keeps working.
 ### Making the Apple keys
 
 - **APNs:** developer.apple.com → Certificates, Identifiers & Profiles → Keys → **+** →
-  *Apple Push Notifications service (APNs)*. One key works for every app on the team,
-  and for both sandbox and production.
+  *Apple Push Notifications service (APNs)*. When configuring it, set the environment
+  to **Sandbox & Production**: a Sandbox-only key is refused for TestFlight and App
+  Store installs (`403 BadEnvironmentKeyInToken`), and a Production-only one for Xcode
+  debug builds. One key works for every app on the team.
 - **Maps:** Identifiers → **+** → *Maps IDs*, then Keys → **+** → *MapKit JS* and pick
   that Maps ID. (The Maps Server API uses the MapKit JS key.)
 - In Identifiers, edit `net.leatham.mycommute` and tick **Push Notifications**.

@@ -252,6 +252,8 @@ export class Commutes {
       // The user dismissed the activity, or it expired.
       this.deps.store.updateCommute(commute.id, { ended: now.getTime(), activityToken: null });
     } else {
+      // Wait a full refresh interval before trying again, rather than every tick.
+      this.deps.store.updateCommute(commute.id, { lastPush: now.getTime() });
       this.deps.log("update push failed", { status: result.status, reason: result.reason });
     }
   }
