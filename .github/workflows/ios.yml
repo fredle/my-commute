@@ -57,6 +57,18 @@ jobs:
             -archivePath "$ARCHIVE" \
             CODE_SIGNING_ALLOWED=NO
 
+      # The export step signs with the entitlements it finds in the archived
+      # app's signature, and an unsigned archive has none: the uploaded build
+      # would lose aps-environment, and Live Activities with a push token then
+      # refuse to start. An ad-hoc signature (no credentials) carries them over.
+      - name: Carry entitlements into the archive
+        working-directory: ios
+        run: |
+          APP="$ARCHIVE/Products/Applications/MyCommute.app"
+          find "$APP/PlugIns" -name '*.appex' -exec codesign --force --sign - {} \;
+          codesign --force --sign - --entitlements MyCommute/MyCommute.entitlements "$APP"
+          codesign -d --entitlements - "$APP" | tee /dev/stderr | grep -q aps-environment
+
       # Until the secrets exist there is nothing to upload with. Skip rather
       # than fail, so the build signal above stays honest.
       - id: preflight
